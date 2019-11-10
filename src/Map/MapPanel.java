@@ -77,12 +77,6 @@ public class MapPanel extends JPanel
 		g.setColor(Color.BLUE);
 		g.fillOval(x-10, y-10, 20, 20);
 		
-	    double alpha = Math.toRadians(25);
-		Graphics2D g2 = (Graphics2D)g.create();
-		g2.setColor(Color.BLUE);
-		g2.rotate(alpha);
-		g2.drawLine(x, y, x+ 30, y);
-		//g2.setTransform(old);
 	}
 	
 	private void drawScale(Graphics g)
