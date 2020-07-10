@@ -3,8 +3,13 @@ package Comm;
 import java.awt.Image;
 import java.beans.XMLDecoder;
 import java.io.*;
-import java.net.Socket;
-
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.MqttTopic;
 /* RoverCommunicationInterface
  * Interface o send commands to the rover and to receive info messages and images
  *  
@@ -18,158 +23,127 @@ import java.net.Socket;
  *  6 : disable autonomous drive mode 
  *  
  *  11 : set direct control mode
- *  12 : lower sensor
- *  13 : raise sensor
+ *  12 : lower drill
+ *  13 : raise drill
  *  14 : drive forward
  *  15 : drive backward
  *  16 : turn left
  *  17 : turn right  
  *  21 : stop the rover
 */
+
 public class RoverCommunicationInterface 
 {
-	SocketConnectionParameter connParams;
-	Socket socket = null;
-	OutputStream out;
-	InputStream in;
-	PrintStream psout;
+	String broker;
+	String topicName = "marsrover/command";
+	int qos = 1;
 	
 	public RoverCommunicationInterface()  throws Exception
 	{
 		// read serialized infos for connecting to the rover
 	    XMLDecoder d = new XMLDecoder( new BufferedInputStream( new FileInputStream("connectionparameter.xml")));
-	    connParams = (SocketConnectionParameter) d.readObject();
+	    SocketConnectionParameter connParams = (SocketConnectionParameter) d.readObject();
 	    d.close();
+		broker = "tcp://" + connParams.host + ":" + connParams.port; 
 	}
 	
-	public void connectToRover() throws Exception
-	{
-		socket = new Socket(connParams.host, connParams.port);
-		out = socket.getOutputStream(); 
-		in = socket.getInputStream();
-	    psout = new PrintStream(out, true);
-	}
-	
-	public void disconnectToRover() throws Exception
-	{
-		socket.close();
-	}
 	
 	/*
-	 *  COMMUNICATION TO THE ROVER : REQUEST INFORMATION FROM ROVER
+	 *  COMMUNICATION TO THE ROVER : SENDING COMMANDS 
 	 */
 	
 	
-	public String requestStatusInfo() throws Exception
+	public void requestStatusInfo() throws Exception
 	{
-		psout.print(1); 
-        BufferedReader buff = new BufferedReader(new InputStreamReader(in));
-        String out =  buff.readLine() + "\n";
-        return out;
+		sendMessage("1:"); 
 	}
 	
-	public Image requestImage() throws Exception
+	public void requestImage() throws Exception
 	{
-		psout.print(2); 
-        BufferedReader buff = new BufferedReader(new InputStreamReader(in));
-        /*
-        byte[] resultBuff = new byte[0];
-        byte[] buff = new byte[1024];
-        int k = -1;
-        while((k = socket.getInputStream().read(buff, 0, buff.length)) > -1) 
-        {
-            byte[] tbuff = new byte[resultBuff.length + k]; // temp buffer size = bytes already read + bytes last read
-            System.arraycopy(resultBuff, 0, tbuff, 0, resultBuff.length); // copy previous bytes
-            System.arraycopy(buff, 0, tbuff, resultBuff.length, k);  // copy current lot
-            resultBuff = tbuff; // call the temp buffer as your result buff
-        }
-        System.out.println(resultBuff.length + " bytes read.");
-        return null;
-        */
-        
-        String out =  buff.readLine() + "\n";
-        System.out.println(out);
-        return null;
+		sendMessage("2:"); 
         
 	}
 	
-	public String requestMap() throws Exception
+	public void requestMap() throws Exception
 	{
-		 psout.print(3); 
-        BufferedReader buff = new BufferedReader(new InputStreamReader(in));
-        String out =  buff.readLine() + "\n";
-        return out;
+		sendMessage("3:"); 
 	}
 	
 	/*
-	 *  COMMUNICATION TO THE ROVER : SENDING COMMANDS FOR AUTONOMOUS MODE
+	 *  COMMUNICATION TO THE ROVER : SENDING COMMANDS 
 	 */
 	
 	public void setToAutonomous() throws Exception
 	{
-		 psout.print(4); 
+		 sendMessage("4:"); 
 	}
 	
 	public void sendWayPoint(int x, int y, String text) throws Exception
 	{
-		psout.print("5:" + x + ":" + y + ":" + text); 
+		sendMessage("5:" + x + ":" + y + ":" + text); 
 	}
 	
 	public void resetAutonomous() throws Exception
 	{
-		 psout.print(6); 
+		 sendMessage("6:"); 
 	}
-		
-	/*
-	 *  COMMUNICATION TO THE ROVER : SENDING COMMANDS FOR REMOTE CONTROL  MODE
-	 */
 	
 	public void setToDirectContol() throws Exception
 	{
-		 psout.print(11); 
+		 sendMessage("11:"); 
 	}
-	public void lowerSensor() throws Exception
+	public void lowerDrill() throws Exception
 	{
-		 psout.print(12); 
+		 sendMessage("12:"); 
 	}
 	
-	public void raiseSensor() throws Exception
+	public void raiseDrill() throws Exception
 	{
-		 psout.print(13); 
+		 sendMessage("13:"); 
 	}
 	
 	public void forward() throws Exception
 	{
-		 psout.print(14); 
+		 sendMessage("14:"); 
 	}
 	
 	public void backward() throws Exception
 	{
-		 psout.print(15); 
+		 sendMessage("15:"); 
 	}
 	
 	public void turnLeft() throws Exception
 	{
-		 psout.print(16); 
+		 sendMessage("16:"); 
 	}
 	
 	public void turnRight() throws Exception
 	{
-		 psout.print(17); 
+		 sendMessage("17:"); 
 	}
 	
 	public void stopRover() throws Exception
 	{
-		 psout.print(21); 
+		 sendMessage("21:"); 
 	}
-	
-	// Close socket
 
-	public void close() throws Exception
-	{ 
-		socket.close();
+	private void sendMessage(String command) throws Exception
+	{
+		MqttClient client = new MqttClient(broker,"Rover1");
+		MqttConnectOptions mqOptions=new MqttConnectOptions();
+	    mqOptions.setCleanSession(true);
+	    client.connect(mqOptions);      //connecting to broker 
+        mqOptions.setCleanSession(true); //no persistent session 
+        mqOptions.setKeepAliveInterval(1000);
+		MqttMessage message = new MqttMessage(command.getBytes());
+		
+		 
+		message.setQos(qos);     //sets qos level 1
+		message.setRetained(true); //sets retained message 
+		
+		MqttTopic topic = client.getTopic(topicName);
+		
+		topic.publish(message);    // publishes the message to the topic(test/topic)
 	}
-	
-	
 	
 }

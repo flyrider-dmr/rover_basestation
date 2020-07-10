@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <java version="1.8.0_211" class="java.beans.XMLDecoder">
- <object class="SocketConnectionParameter">
+ <object class="Comm.SocketConnectionParameter">
   <void property="host">
-   <string>10.11.12.1</string>
+   <string>broker.hivemq.com</string>
   </void>
   <void property="port">
-   <int>8888</int>
+   <int>1883</int>
   </void>
  </object>
 </java>

@@ -1,21 +1,31 @@
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.event.ActionListener;
-import java.beans.XMLEncoder;
+import java.awt.image.BufferedImage;
+import java.beans.XMLDecoder;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 
 import Comm.RoverCommunicationInterface;
+import Comm.SocketConnectionParameter;
 import Map.Map;
 import Map.MapPanel;
 import Map.MapPoint;
 
+import org.eclipse.paho.client.mqttv3.*;
 
 
-public class RoverbaseStationMain implements ActionListener
+public class RoverbaseStationMain implements ActionListener, MqttCallback
 {
 
 	static int ROVER_UPDATE_TIME = 10;
@@ -31,9 +41,8 @@ public class RoverbaseStationMain implements ActionListener
 	JTextField inputX, inputY, inputT, roverStatus;
 	RoverCommunicationInterface comIf;
 	Map map;
-	Timer infotimer ;
-	Timer maptimer ;
-	
+	Timer infotimer, maptimer, imagetimer ;
+
 	public static void main(String[] args) 
 	{
 		new RoverbaseStationMain();
@@ -194,14 +203,14 @@ public class RoverbaseStationMain implements ActionListener
 		// General Buttons
 		
 		
-		lowerprobeB = new JButton("SENSOR LOW");
+		lowerprobeB = new JButton("DRILL LOW");
 		//probeB.setEnabled(false);
 		lowerprobeB.setBounds(10,340,130,30);
 		lowerprobeB.addActionListener(this);
 		commandP.add(lowerprobeB);
 
 		
-		raiseprobeB = new JButton("SENSOR UP");
+		raiseprobeB = new JButton("DRILL UP");
 		//probeB.setEnabled(false);
 		raiseprobeB.setBounds(150,340,130,30);
 		raiseprobeB.addActionListener(this);
@@ -220,11 +229,40 @@ public class RoverbaseStationMain implements ActionListener
 		
 		
 		// Timer setup
-		infotimer = new Timer(10000, this);
+		infotimer = new Timer(7000, this);
 		infotimer.addActionListener(this);
-		maptimer  = new Timer(10000, this);
+		maptimer  = new Timer(11000, this);
 		maptimer.addActionListener(this);
+		imagetimer  = new Timer(13000, this);
+		imagetimer.addActionListener(this);
 		
+		// MQTT Subscriber
+		// read serialized infos for connecting to the rover
+	    try {
+			XMLDecoder d = new XMLDecoder( new BufferedInputStream( new FileInputStream("connectionparameter.xml")));
+			SocketConnectionParameter connParams = (SocketConnectionParameter) d.readObject();
+			d.close();
+			String broker = "tcp://" + connParams.getHost() + ":" + connParams.getPort(); 
+			
+			MqttClient client = new MqttClient(broker,"RoverMain");
+			client.setCallback(this);
+			MqttConnectOptions mqOptions=new MqttConnectOptions();
+			 mqOptions.setCleanSession(true);
+			 client.connect(mqOptions);      //connecting to broker 
+			 client.subscribe("marsrover/map"); //subscribing to the topic name  test/topic
+			 client.subscribe("marsrover/statusinfo"); //subscribing to the topic name  test/topic
+			 client.subscribe("marsrover/image"); //subscribing to the topic name  test/topic
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (MqttSecurityException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (MqttException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	     
 		/*
 		SocketConnectionParameter c = new SocketConnectionParameter();
 		c.setHost("10.11.12.1");
@@ -232,10 +270,7 @@ public class RoverbaseStationMain implements ActionListener
 		
 	    XMLEncoder e;
 		try {
-			e = new XMLEncoder(
-			           new BufferedOutputStream(
-			               new FileOutputStream("connectionparameter.xml")));
-			
+			e = new XMLEncoder( new BufferedOutputStream( new FileOutputStream("connectionparameter.xml")));
 			e.writeObject(c);
 			e.close();
 		} catch (FileNotFoundException e1) {
@@ -243,7 +278,7 @@ public class RoverbaseStationMain implements ActionListener
 			e1.printStackTrace();
 		}
 		*/
-
+	
 	}
 
 	private void updateRoverStatus() 
@@ -254,9 +289,9 @@ public class RoverbaseStationMain implements ActionListener
 		{	// ROVER DATA
 			String status = "  ROV : X: " + map.rover.estX + " Y:  " + map.rover.estX + " Speed: " + map.rover.speed + " Turn: " +  map.rover.rotX; 
 			if(map.rover.sensUP == 1)
-				status = status + " SEN UP";
+				status = status + " DRILL UP";
 			else
-				status = status + " SEN DOWN";
+				status = status + " DRILL DOWN";
 			roverStatus.setText(status);
 			
 			// POSITION
@@ -275,13 +310,11 @@ public class RoverbaseStationMain implements ActionListener
 			try 
 			{
 				// Comm Interface
-				infoA.append("Trying to connect to rover...\n");
 				comIf = new RoverCommunicationInterface();
-				comIf.connectToRover();
-				infoA.append("Connection to rover established...\n");
 				infoA.append("Starting timer for information update requests...\n");
-				infotimer.start();
-				maptimer.start();
+				//infotimer.start();
+				//maptimer.start();
+				imagetimer.start();
 				// Enable buttons
 				lowerprobeB.setEnabled(true);
 				raiseprobeB.setEnabled(true);
@@ -291,14 +324,9 @@ public class RoverbaseStationMain implements ActionListener
 			} 
 			catch (Exception e1) 
 			{
-				// TODO Auto-generated catch block
-				infoA.append("Connection to rover failed\n" + e1.getMessage() + "\n");
+				infoA.append("Timer start failed\n" + e1.getMessage() + "\n");
 				e1.printStackTrace();
 				
-			}
-			finally
-			{
-				//comIf.close();
 			}
 		}
 		
@@ -394,8 +422,8 @@ public class RoverbaseStationMain implements ActionListener
 		if(e.getSource() == lowerprobeB)
 		{
 			try {
-				infoA.append("Command SENSOR DOWN sent...\n");
-				comIf.lowerSensor();
+				infoA.append("Command DRILL DOWN sent...\n");
+				comIf.lowerDrill();
 
 			} 
 			catch (Exception e1) 
@@ -407,8 +435,8 @@ public class RoverbaseStationMain implements ActionListener
 		if(e.getSource() == raiseprobeB)
 		{
 			try {
-				infoA.append("Command SENSOR UP sent...\n");
-				comIf.raiseSensor();
+				infoA.append("Command DRILL UP sent...\n");
+				comIf.raiseDrill();
 
 			} 
 			catch (Exception e1) 
@@ -439,18 +467,7 @@ public class RoverbaseStationMain implements ActionListener
 		{
 			
 			try {
-				String res = comIf.requestStatusInfo();
-				infoA.append(res);
-				res = res.replace("\n", "");
-				String[] line = res.split(":");
-				map.rover.estX = Integer.parseInt(line[0]);
-				map.rover.estY = Integer.parseInt(line[1]);
-				map.rover.speed = Integer.parseInt(line[2]);
-				map.rover.rotX = Integer.parseInt(line[3]);
-				map.rover.sensUP = Integer.parseInt(line[4]);	
-				map.rover.autonomousDrive = Integer.parseInt(line[5]);
-				updateRoverStatus();
-				updateGUIAutonomousDrive();
+				comIf.requestStatusInfo();
 			} 
 			catch (Exception e1) 
 			{
@@ -462,41 +479,21 @@ public class RoverbaseStationMain implements ActionListener
 		if(e.getSource() == maptimer)
 		{
 			try {
-				String res = comIf.requestMap();
-				if(res.length() < 1)
-					return;
-				infoA.append(res);
-				
-				// Clear the current map 
-				map.obstacles.clear();
-				map.waypoints.clear();
-				
-				res = res.replace("\n", ";");
-				String[] lines = res.split(";");
-				for(int i = 0; i < lines.length; i++)
-				{
-					String[] parts = lines[i].split(":");
-					if(parts[0].compareTo("W") == 0)
-					{
-						int x = Integer.parseInt(parts[1]);
-						int y = Integer.parseInt(parts[2]);
-						String name = parts[3];
-						map.waypoints.add(new MapPoint(x,y,name));
-					}
-					else // needs to be an obstacle
-					{
-						int x = Integer.parseInt(parts[1]);
-						int y = Integer.parseInt(parts[2]);
-						map.obstacles.add(new Rectangle(x,y, 40,40));
-					}
-				}
-				updateRoverStatus();
-				mapP.repaint();
-				
+				comIf.requestMap();
 			} 
 			catch (Exception e1) 
 			{
-				infoA.append("Communication failure during status request: \n" + e1.getMessage() + "\n");
+				infoA.append("Communication failure during map request: \n" + e1.getMessage() + "\n");
+			}
+		}
+		if(e.getSource() == imagetimer)
+		{
+			try {
+				comIf.requestImage();
+			} 
+			catch (Exception e1) 
+			{
+				infoA.append("Communication failure during image request: \n" + e1.getMessage() + "\n");
 			}
 		}
 	}
@@ -519,6 +516,87 @@ public class RoverbaseStationMain implements ActionListener
 			tabC.setSelectedIndex(0);
 			tabC.setEnabledAt(1, true);
 			tabC.setEnabledAt(0, false);
+		}
+	}
+
+	@Override
+	public void connectionLost(Throwable arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void deliveryComplete(IMqttDeliveryToken arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void messageArrived(String topic, MqttMessage message) throws Exception 
+	{
+		String res = message.toString();
+		
+		// INFO MESSAGE 
+		if(topic.compareTo("marsrover/statusinfo") == 0)
+		{
+			infoA.append(res + "\n");
+			res = res.replace("\n", "");
+			String[] line = res.split(":");
+			map.rover.estX = Integer.parseInt(line[0]);
+			map.rover.estY = Integer.parseInt(line[1]);
+			map.rover.speed = Integer.parseInt(line[2]);
+			map.rover.rotX = Integer.parseInt(line[3]);
+			map.rover.sensUP = Integer.parseInt(line[4]);	
+			map.rover.autonomousDrive = Integer.parseInt(line[5]);
+			updateRoverStatus();
+			updateGUIAutonomousDrive();
+		}
+		// MAP UPDATE 
+		if(topic.compareTo("marsrover/map") == 0)
+		{
+			if(res.length() < 1)
+				return;
+			infoA.append("New map received ... \n");
+			
+			// Clear the current map 
+			map.obstacles.clear();
+			map.waypoints.clear();
+			
+			res = res.replace("\n", ";");
+			String[] lines = res.split(";");
+			for(int i = 0; i < lines.length; i++)
+			{
+				String[] parts = lines[i].split(":");
+				if(parts[0].compareTo("W") == 0)
+				{
+					int x = Integer.parseInt(parts[1]);
+					int y = Integer.parseInt(parts[2]);
+					String name = parts[3];
+					map.waypoints.add(new MapPoint(x,y,name));
+				}
+				else // needs to be an obstacle
+				{
+					int x = Integer.parseInt(parts[1]);
+					int y = Integer.parseInt(parts[2]);
+					map.obstacles.add(new Rectangle(x,y, 40,40));
+				}
+			}
+			updateRoverStatus();
+			mapP.repaint();
+		}
+		
+		if(topic.compareTo("marsrover/image") == 0)
+		{  
+			byte[] data = message.getPayload();
+		    ByteArrayInputStream bis = new ByteArrayInputStream(data);
+		    BufferedImage bImage2 = ImageIO.read(bis);
+		    Date date = Calendar.getInstance().getTime();  
+		    
+		    imageP.updateImage(bImage2);
+		    DateFormat dateFormat = new SimpleDateFormat("yyyy_mm_dd_hhmm_ss");  
+		    String strDate = dateFormat.format(date);
+		    ImageIO.write(bImage2, "jpg", new File("images/marsrover_" + strDate + ".jpg") );
+		    
 		}
 	}
 }
