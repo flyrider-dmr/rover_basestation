@@ -26,7 +26,7 @@ public class ImagePanel extends JPanel
 	
 	protected void paintComponent(Graphics g) 
 	{	super.paintComponent(g); 
-		g.drawImage(currImg, 0,0,this);
+		g.drawImage(currImg, 0,100,this);
 
 	}
 	
