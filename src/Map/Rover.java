@@ -12,7 +12,7 @@ package Map;
 public class Rover 
 {
 
-	public int estX,estY, speed, rotX, sensUP, autonomousDrive;
+	public int estX,estY, speed, rotX, sensUP, autonomousDrive, mastTurn, mastPitch;
 	
 	public Rover()
 	{
@@ -22,6 +22,8 @@ public class Rover
 		rotX = 0;
 		sensUP = 1;
 		autonomousDrive = 0;
+		mastTurn = 0;
+		mastPitch = 0;
 	}
 
 }

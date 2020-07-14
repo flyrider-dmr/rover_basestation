@@ -32,17 +32,19 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 	static int MAP_UPDATE_TIME = 15;
 
 	
-	JPanel commandP, remoteP, autonomousP;
+	JPanel commandP, remoteP, autonomousP ,mastCamPanel;
 	ImagePanel imageP;
 	MapPanel mapP;
 	JTabbedPane tab, tabC;
 	JButton connectB, disconnectB , gotoB, lowerprobeB, raiseprobeB, stopB , stopB2 , fwdB, bwdB, leftB, righB , autB;
+	JButton mastLeft, mastRight, mastUp, mastDown;
 	JTextArea infoA;
-	JTextField inputX, inputY, inputT, roverStatus;
+	JTextField inputX, inputY, inputT, roverStatus, drillOffX, drillOffY, mastAngle;
 	RoverCommunicationInterface comIf;
 	Map map;
 	Timer infotimer, maptimer, imagetimer ;
-
+	JFrame mainW;
+	
 	public static void main(String[] args) 
 	{
 		new RoverbaseStationMain();
@@ -52,7 +54,7 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 	{
 		
 		// Build up GUI - Main Window
-		JFrame mainW = new JFrame("Discount Mars Rover Base Station"); 
+	    mainW = new JFrame("Discount Mars Rover Base Station"); 
 		mainW.setSize(1600,860);
 		mainW.setResizable(false);
 		mainW.setLocation(100,100);
@@ -100,7 +102,7 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		
 		infoA = new JTextArea();
         JScrollPane scrollPane1 = new JScrollPane (infoA,  ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
-		scrollPane1.setBounds(10,400,500, 370);
+		scrollPane1.setBounds(10,440,500, 330);
 		commandP.add(scrollPane1);
 		mainW.add(commandP);
 		
@@ -132,11 +134,17 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		remoteP.setBackground(Color.black);
 		remoteP.setLayout(null);
 		
+		mastCamPanel = new JPanel();
+		mastCamPanel.setBackground(Color.black);
+		mastCamPanel.setLayout(null);
+		
 		autonomousP = new JPanel();
 		autonomousP.setLayout(null);
 		autonomousP.setBackground(Color.black);
 		tabC.addTab("Remote Control", remoteP);
 		tabC.addTab("Autonomous Drive", autonomousP);
+		tabC.addTab("Camera Mast Control", mastCamPanel);
+		
 		commandP.add(tabC);
 		// Buttons for autonomous drive
 		
@@ -199,8 +207,34 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		remoteP.add(bwdB);
 		
 		
+		// Camera mast Remote Control
 		
-		// General Buttons
+		mastLeft = new JButton("LEFT");
+		mastLeft.setBounds(10,70,130,30);
+		mastLeft.addActionListener(this);
+		mastCamPanel.add(mastLeft);
+		
+		mastRight = new JButton("RIGHT");
+		mastRight.setBounds(300,70,130,30);
+		mastRight.addActionListener(this);
+		mastCamPanel.add(mastRight);
+
+		
+		mastUp = new JButton("UP");
+		mastUp.setBounds(150,10,130,30);
+		mastUp.addActionListener(this);
+		mastCamPanel.add(mastUp);
+		
+		mastDown = new JButton("DOWN");
+		mastDown.setBounds(150,130,130,30);
+		mastDown.addActionListener(this);
+		mastCamPanel.add(mastDown);
+		
+		mastAngle = new JTextField();
+		mastAngle.setBounds(190,70,50,30);
+		mastCamPanel.add(mastAngle);
+		
+		// General Buttons and Textfields
 		
 		
 		lowerprobeB = new JButton("DRILL LOW");
@@ -222,9 +256,27 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		stopB.addActionListener(this);
 		commandP.add(stopB);
 		
-
+		JLabel lab1 = new JLabel("DRILL OFFSET   X :");
+		lab1.setBounds(10,390,170,30);
+		lab1.setFont(new Font("Arial", 0 , 18));
+		lab1.setForeground(Color.WHITE);
+		commandP.add(lab1);
 		
+		JLabel lab2 = new JLabel(" Y : ");
+		lab2.setBounds(250,390,170,30);
+		lab2.setFont(new Font("Arial", 0 , 18));
+		lab2.setForeground(Color.WHITE);
+		commandP.add(lab2);
 		
+		drillOffX = new JTextField();
+		drillOffX.setBounds(190,390,50,30);
+		commandP.add(drillOffX);
+		
+		drillOffY = new JTextField();
+		drillOffY.setBounds(300,390,50,30);
+		commandP.add(drillOffY);
+		
+		setControlsEnabled(false);
 		mainW.setVisible(true);
 		
 		
@@ -236,9 +288,13 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		imagetimer  = new Timer(13000, this);
 		imagetimer.addActionListener(this);
 		
+		
+		
 		// MQTT Subscriber
 		// read serialized infos for connecting to the rover
 	    try {
+	    	comIf = new RoverCommunicationInterface();
+	    	
 			XMLDecoder d = new XMLDecoder( new BufferedInputStream( new FileInputStream("connectionparameter.xml")));
 			SocketConnectionParameter connParams = (SocketConnectionParameter) d.readObject();
 			d.close();
@@ -261,6 +317,9 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		} catch (MqttException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		}catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	     
 		/*
@@ -281,17 +340,31 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 	
 	}
 
+	private void setControlsEnabled (boolean stat)
+	{
+		fwdB.setEnabled(stat);
+		bwdB.setEnabled(stat);
+		stopB.setEnabled(stat);
+		stopB2.setEnabled(stat);
+		righB.setEnabled(stat);
+		leftB.setEnabled(stat);
+		lowerprobeB.setEnabled(stat);
+		raiseprobeB.setEnabled(stat);
+		
+	}
+	
 	private void updateRoverStatus() 
 	{
 		if(map == null)
 			roverStatus.setText("No status information");
 		else
 		{	// ROVER DATA
-			String status = "  ROV : X: " + map.rover.estX + " Y:  " + map.rover.estX + " Speed: " + map.rover.speed + " Turn: " +  map.rover.rotX; 
+			String status = "PoX: " + map.rover.estX + " PoY:  " + map.rover.estX + " Sp: " + map.rover.speed + " TA: " +  map.rover.rotX; 
 			if(map.rover.sensUP == 1)
-				status = status + " DRILL UP";
+				status = status + " DR UP";
 			else
-				status = status + " DRILL DOWN";
+				status = status + " DR DOWN";
+			status = status + " CaT: " + map.rover.mastTurn + " CaP: " + map.rover.mastPitch;
 			roverStatus.setText(status);
 			
 			// POSITION
@@ -312,20 +385,19 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 				// Comm Interface
 				comIf = new RoverCommunicationInterface();
 				infoA.append("Starting timer for information update requests...\n");
-				//infotimer.start();
-				//maptimer.start();
+				infotimer.start();
+				maptimer.start();
 				imagetimer.start();
 				// Enable buttons
 				lowerprobeB.setEnabled(true);
 				raiseprobeB.setEnabled(true);
-				gotoB.setEnabled(true);
-				stopB.setEnabled(true);
+				setControlsEnabled(true);
+				comIf.requestStatusInfo();
 				
 			} 
 			catch (Exception e1) 
 			{
 				infoA.append("Timer start failed\n" + e1.getMessage() + "\n");
-				e1.printStackTrace();
 				
 			}
 		}
@@ -358,8 +430,6 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 			try {
 				infoA.append("Rover STOP command sent...\n");
 				comIf.stopRover();
-				infotimer.stop();
-				maptimer.stop();
 			} 
 			catch (Exception e1) 
 			{
@@ -421,9 +491,24 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		
 		if(e.getSource() == lowerprobeB)
 		{
-			try {
+			try 
+			{
 				infoA.append("Command DRILL DOWN sent...\n");
-				comIf.lowerDrill();
+				int x,y =  0;
+				
+				try {
+					x = Integer.parseInt(drillOffX.getText());
+				} catch (Exception e1) 
+				{
+					x = 0;
+				}
+				
+				try {
+					y = Integer.parseInt(drillOffY.getText());
+				} catch (Exception e1) {
+					y = 0; 
+				}
+				comIf.lowerDrill(x,y);
 
 			} 
 			catch (Exception e1) 
@@ -431,7 +516,60 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 				infoA.append("Communication failure for sensor down command... \n" + e1.getMessage() + "\n");
 			}
 		}
-		
+		try
+		{
+			// MAST REMOTE CONTROL
+			if(e.getSource() == mastLeft)
+			{
+				int ang = Integer.parseInt(mastAngle.getText());
+				if(Math.abs(ang) > 45)
+				{
+					JOptionPane.showMessageDialog(commandP, "Maximum turn angle ist 45 degrees");
+					return;
+				}
+				mastAngle.setText("");
+				comIf.mastCamLeft(ang);
+			}
+			if(e.getSource() == mastRight)
+			{
+				int ang = Integer.parseInt(mastAngle.getText());
+				if(Math.abs(ang) > 45)
+				{
+					JOptionPane.showMessageDialog(commandP, "Maximum turn angle ist 45 degrees");
+					return;
+				}
+				mastAngle.setText("");
+				comIf.mastCamRight(ang);
+			}
+			if(e.getSource() == mastUp)
+			{
+				int ang = Integer.parseInt(mastAngle.getText());
+				if(Math.abs(ang) > 30)
+				{
+					JOptionPane.showMessageDialog(commandP, "Maximum tilt up angle ist 30 degrees");
+					return;
+				}
+				mastAngle.setText("");
+				comIf.mastCamUp(ang);
+			}
+			if(e.getSource() == mastDown)
+			{
+				int ang = Integer.parseInt(mastAngle.getText());
+				if(Math.abs(ang) > 30)
+				{
+					JOptionPane.showMessageDialog(commandP, "Maximum tilt up angle ist 30 degrees");
+					return;
+				}
+				mastAngle.setText("");
+				comIf.mastCamDown(ang);
+			}
+		}
+		catch (Exception e1) 
+		{
+			JOptionPane.showMessageDialog(commandP, "Please insert angle for camera operation");
+			return;
+		}
+		// DRILL REMOTE CONTROL
 		if(e.getSource() == raiseprobeB)
 		{
 			try {
@@ -548,6 +686,9 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 			map.rover.rotX = Integer.parseInt(line[3]);
 			map.rover.sensUP = Integer.parseInt(line[4]);	
 			map.rover.autonomousDrive = Integer.parseInt(line[5]);
+			map.rover.mastTurn = Integer.parseInt(line[6]);
+			map.rover.mastPitch = Integer.parseInt(line[7]);
+			
 			updateRoverStatus();
 			updateGUIAutonomousDrive();
 		}

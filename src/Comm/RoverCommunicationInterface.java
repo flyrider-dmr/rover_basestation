@@ -87,14 +87,29 @@ public class RoverCommunicationInterface
 	{
 		 sendMessage("6:"); 
 	}
-	
+	public void mastCamRight(int angle) throws Exception
+	{
+		 sendMessage("7:" + angle); 
+	}
+	public void mastCamLeft(int angle) throws Exception
+	{
+		 sendMessage("8:" + angle); 
+	}
+	public void mastCamUp(int angle) throws Exception
+	{
+		 sendMessage("9:" + angle); 
+	}
+	public void mastCamDown(int angle) throws Exception
+	{
+		 sendMessage("10:" + angle); 
+	}
 	public void setToDirectContol() throws Exception
 	{
 		 sendMessage("11:"); 
 	}
-	public void lowerDrill() throws Exception
+	public void lowerDrill(int x, int y) throws Exception
 	{
-		 sendMessage("12:"); 
+		 sendMessage("12:" + x + ":" + y); 
 	}
 	
 	public void raiseDrill() throws Exception
