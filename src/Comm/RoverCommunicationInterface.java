@@ -158,7 +158,7 @@ public class RoverCommunicationInterface
 		
 		MqttTopic topic = client.getTopic(topicName);
 		
-		topic.publish(message);    // publishes the message to the topic(test/topic)
+		topic.publish(message);    // publishes the message to the topic
 	}
 	
 }

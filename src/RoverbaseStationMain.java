@@ -281,15 +281,10 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		
 		
 		// Timer setup
-		infotimer = new Timer(7000, this);
-		infotimer.addActionListener(this);
+		infotimer = new Timer(5000, this);
 		maptimer  = new Timer(11000, this);
-		maptimer.addActionListener(this);
 		imagetimer  = new Timer(13000, this);
-		imagetimer.addActionListener(this);
-		
-		
-		
+
 		// MQTT Subscriber
 		// read serialized infos for connecting to the rover
 	    try {
@@ -611,7 +606,6 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 			{
 				infoA.append("Communication failure during status request: \n" + e1.getMessage() + "\n");
 			}
-
 		}
 		
 		if(e.getSource() == maptimer)
@@ -676,8 +670,7 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		
 		// INFO MESSAGE 
 		if(topic.compareTo("marsrover/statusinfo") == 0)
-		{
-			infoA.append(res + "\n");
+		{	infoA.append(res +"\n");
 			res = res.replace("\n", "");
 			String[] line = res.split(":");
 			map.rover.estX = Integer.parseInt(line[0]);
@@ -697,7 +690,6 @@ public class RoverbaseStationMain implements ActionListener, MqttCallback
 		{
 			if(res.length() < 1)
 				return;
-			infoA.append("New map received ... \n");
 			
 			// Clear the current map 
 			map.obstacles.clear();
